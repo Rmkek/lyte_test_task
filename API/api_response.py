@@ -10,6 +10,7 @@ class APITicketWithReservationsResponse(BaseModel):
     reservation_fee: Decimal
     ticket_requests: List[APITicketRequest]
 
+
 class APIPerfomanceResponse(BaseModel):
     average_process_time: Decimal
     requests_count: int

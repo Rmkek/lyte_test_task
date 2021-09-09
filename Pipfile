@@ -4,9 +4,14 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+requests = "*"
 
 [dev-packages]
 autopep8 = "*"
+black = "*"
+pytest = "*"
+coverage = "*"
+pre-commit = "*"
 
 [requires]
 python_version = "3.9"

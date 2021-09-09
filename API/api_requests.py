@@ -7,6 +7,7 @@ class APITicketRequest(BaseModel):
     tier_id: int
     ticket_id: Optional[int]
 
+
 class APITicketWithReservationsRequest(BaseModel):
     reservation_id: int
     ticket_requests: List[APITicketRequest]
