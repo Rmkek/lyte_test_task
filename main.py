@@ -1,14 +1,14 @@
 from api.api_requests import APITicketRequest, APITicketWithReservationsRequest
 from api.api_response import APITicketWithReservationsResponse, APIPerfomanceResponse
 from api.exceptions import TicketRequestFailed
-
 from models.ticket import Ticket
 from models.tier import Tier
-
 from db import create_db_and_tables, create_test_data, clear_test_db
 
 from typing import List
 import time
+from functools import wraps
+
 from sqlmodel import Session, select
 from fastapi import FastAPI, HTTPException
 
@@ -23,15 +23,31 @@ requests_count = 0
 average_process_time = 0
 
 
+def measure_performance(func):
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        global requests_count, average_process_time
+        requests_count += 1
+
+        start_time = time.time()
+
+        try:
+            response = await func(*args, **kwargs)
+        except BaseException as ex:
+            raise ex
+        finally:
+            average_process_time = (time.time() - start_time) / requests_count
+
+        return response
+
+    return wrapper
+
+
 @app.post(
     "/api/v1/ticket-requests", response_model=List[APITicketWithReservationsResponse]
 )
+@measure_performance
 async def get_tickets(api_ticket_requests: List[APITicketWithReservationsRequest]):
-    # TODO: fixme, read more fastapi doc, because of some reason functional wrapper didn't work here
-    global requests_count, average_process_time
-    start_time = time.time()
-    requests_count += 1
-
     api_response: List[APITicketWithReservationsResponse] = []
     try:
         for user_request in api_ticket_requests:
@@ -90,8 +106,6 @@ async def get_tickets(api_ticket_requests: List[APITicketWithReservationsRequest
                 api_response.append(request_response)
     except TicketRequestFailed as ticket_request_failed:
         raise HTTPException(status_code=400, detail=str(ticket_request_failed))
-    finally:
-        average_process_time = (time.time() - start_time) / requests_count
 
     return api_response
 

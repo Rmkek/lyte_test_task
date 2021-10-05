@@ -3,3 +3,4 @@ test_db.db
 .pytest_cache/
 .vscode/
 __pycache__/main.cpython-39.pyc
+test_db.db
