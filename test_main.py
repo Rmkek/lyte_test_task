@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from main import app
-from API.exceptions import TicketRequestFailed
+from api.exceptions import TicketRequestFailed
 
 client = TestClient(app)
 

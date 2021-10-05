@@ -1,6 +1,6 @@
-from API.api_requests import APITicketRequest, APITicketWithReservationsRequest
-from API.api_response import APITicketWithReservationsResponse, APIPerfomanceResponse
-from API.exceptions import TicketRequestFailed
+from api.api_requests import APITicketRequest, APITicketWithReservationsRequest
+from api.api_response import APITicketWithReservationsResponse, APIPerfomanceResponse
+from api.exceptions import TicketRequestFailed
 
 from models.ticket import Ticket
 from models.tier import Tier
