@@ -1,13 +1,25 @@
-from typing import Optional, List
 from pydantic import BaseModel
 
 
-class APITicketRequest(BaseModel):
-    ticket_request_id: int
-    tier_id: int
-    ticket_id: Optional[int]
+class CreateStudentRequest(BaseModel):
+    full_name: str
 
 
-class APITicketWithReservationsRequest(BaseModel):
-    reservation_id: int
-    ticket_requests: List[APITicketRequest]
+class CreateTeacherRequest(BaseModel):
+    full_name: str
+
+
+class StudentAssignmentRequest(BaseModel):
+    student_name: str
+    assignment_name: str
+
+
+class TeacherAssignmentRequest(BaseModel):
+    teacher_name: str
+    assignment_name: str
+
+
+class AddTeacherAssignmentRequest(BaseModel):
+    teacher_name: str
+    name: str
+    text: str

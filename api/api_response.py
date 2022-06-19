@@ -1,16 +1,20 @@
-from typing import Optional, List
-from decimal import Decimal
+from typing import List
+from models.assignment import Assignment
+from models.teacher import Teacher
 from pydantic import BaseModel
-from .api_requests import APITicketRequest
+from models.student import Student
 
 
-class APITicketWithReservationsResponse(BaseModel):
-    reservation_id: int
-    reservation_cost: int
-    reservation_fee: Decimal
-    ticket_requests: List[APITicketRequest]
+class StudentTakeAssignmentResponse(BaseModel):
+    student: Student
+    assignments: List[Assignment]
 
 
-class APIPerfomanceResponse(BaseModel):
-    average_process_time: Decimal
-    requests_count: int
+class StudentDoneAssignmentResponse(BaseModel):
+    student: Student
+    assignment: Assignment
+
+
+class TeacherAssignmentResponse(BaseModel):
+    teacher: Teacher
+    assignments: List[Assignment]

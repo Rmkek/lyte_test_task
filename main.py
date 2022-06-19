@@ -1,16 +1,29 @@
-from api.api_requests import APITicketRequest, APITicketWithReservationsRequest
-from api.api_response import APITicketWithReservationsResponse, APIPerfomanceResponse
-from api.exceptions import TicketRequestFailed
-from models.ticket import Ticket
-from models.tier import Tier
-from db import create_db_and_tables, create_test_data, clear_test_db
+from urllib import response
+from api.api_requests import (
+    AddTeacherAssignmentRequest,
+    CreateStudentRequest,
+    CreateTeacherRequest,
+    StudentAssignmentRequest,
+    TeacherAssignmentRequest,
+)
+from api.api_response import (
+    StudentDoneAssignmentResponse,
+    StudentTakeAssignmentResponse,
+    TeacherAssignmentResponse,
+)
+from models.assignment import Assignment
+from models.student import Student
+from models.teacher import Teacher
+from db import create_db_and_tables, clear_test_db, create_test_data
 
 from typing import List
 import time
 from functools import wraps
 
 from sqlmodel import Session, select
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+
+# from endpoints.students import students
 
 
 engine = create_db_and_tables("sqlite:///test_db.db")
@@ -18,101 +31,172 @@ engine = create_db_and_tables("sqlite:///test_db.db")
 clear_test_db(engine)
 create_test_data(engine)
 
+
+def get_session():
+    with Session(engine) as session:
+        yield session
+
+
 app = FastAPI()
-requests_count = 0
-average_process_time = 0
 
 
-def measure_performance(func):
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        global requests_count, average_process_time
-        requests_count += 1
+@app.put("/api/student", tags=["student"], response_model=Student)
+async def create_student(
+    create_student_request: CreateStudentRequest,
+    session: Session = Depends(get_session),
+):
+    student = Student(full_name=create_student_request.full_name)
+    session.add(student)
+    session.commit()
 
-        start_time = time.time()
+    return student
 
-        try:
-            response = await func(*args, **kwargs)
-        except BaseException as ex:
-            raise ex
-        finally:
-            average_process_time = (time.time() - start_time) / requests_count
 
-        return response
+@app.get("/api/student", tags=["student"], response_model=Student)
+async def get_student(full_name: str, session: Session = Depends(get_session)):
+    student = session.exec(
+        select(Student).where(
+            Student.full_name == full_name,
+        )
+    ).first()
 
-    return wrapper
+    return student
 
 
 @app.post(
-    "/api/v1/ticket-requests", response_model=List[APITicketWithReservationsResponse]
+    "/api/student/take_assignment",
+    tags=["student"],
+    response_model=StudentTakeAssignmentResponse,
 )
-@measure_performance
-async def get_tickets(api_ticket_requests: List[APITicketWithReservationsRequest]):
-    api_response: List[APITicketWithReservationsResponse] = []
-    try:
-        for user_request in api_ticket_requests:
-            request_response: APITicketWithReservationsResponse = (
-                APITicketWithReservationsResponse(
-                    reservation_id=-1,
-                    reservation_cost=-1,
-                    reservation_fee=-1.0,
-                    ticket_requests=[],
-                )
-            )
-
-            with Session(engine) as session:
-                ticket_transaction = []
-                reservation_cost = 0
-                reservation_fee = 0
-
-                for ticket_request in user_request.ticket_requests:
-                    requested_tier_id = ticket_request.tier_id
-                    tickets_with_tiers = session.exec(
-                        select(Ticket, Tier)
-                        .join(Tier)
-                        .where(
-                            Ticket.tier_id == requested_tier_id, Ticket.status == "FREE"
-                        )
-                    ).first()
-
-                    if tickets_with_tiers is None:
-                        raise TicketRequestFailed()
-
-                    requested_ticket, requested_tier = tickets_with_tiers
-
-                    requested_ticket.status = "SOLD"
-                    ticket_transaction.append(requested_ticket)
-                    reservation_cost += requested_tier.price
-                    reservation_fee += (
-                        requested_tier.price * requested_tier.transfer_fee_percent
-                    )
-
-                    request_response.ticket_requests.append(
-                        APITicketRequest(
-                            ticket_request_id=ticket_request.ticket_request_id,
-                            tier_id=requested_tier_id,
-                            ticket_id=requested_ticket.id,
-                        )
-                    )
-
-                for ticket in ticket_transaction:
-                    session.add(ticket)
-                session.commit()
-
-                request_response.reservation_id = user_request.reservation_id
-                request_response.reservation_cost = reservation_cost
-                request_response.reservation_fee = reservation_fee
-
-                api_response.append(request_response)
-    except TicketRequestFailed as ticket_request_failed:
-        raise HTTPException(status_code=400, detail=str(ticket_request_failed))
-
-    return api_response
+async def take_assignment(
+    take_assignment: StudentAssignmentRequest, session: Session = Depends(get_session)
+):
+    assignment = session.exec(
+        select(Assignment).where(
+            Assignment.name == take_assignment.assignment_name,
+        )
+    ).first()
+    student = session.exec(
+        select(Student).where(
+            Student.full_name == take_assignment.student_name,
+        )
+    ).first()
+    student.assignments.append(assignment)
+    session.add(student)
+    session.commit()
+    session.refresh(student)
+    print(student.assignments)
+    return StudentTakeAssignmentResponse(
+        student=student, assignments=student.assignments
+    )
 
 
-@app.get("/api/v1/performance", response_model=APIPerfomanceResponse)
-async def get_performance():
-    global requests_count, average_process_time
-    return APIPerfomanceResponse(
-        requests_count=requests_count, average_process_time=average_process_time
+@app.post(
+    "/api/student/done_assignment",
+    tags=["student"],
+    response_model=StudentTakeAssignmentResponse,
+)
+async def take_assignment(
+    take_assignment: StudentAssignmentRequest, session: Session = Depends(get_session)
+):
+    found_student = session.exec(
+        select(Student, Assignment)
+        .join(Assignment)
+        .where(
+            Assignment.name == take_assignment.assignment_name,
+            Student.full_name == take_assignment.student_name,
+        )
+    ).first()
+
+    found_student[1].confirmed_by_student = True
+    session.add(found_student[1])
+    session.commit()
+
+    return StudentTakeAssignmentResponse(
+        student=found_student[0], assignments=found_student[0].assignments
+    )
+
+
+@app.put("/api/teacher", tags=["teacher"], response_model=Teacher)
+async def create_teacher(
+    create_teacher_request: CreateTeacherRequest,
+    session: Session = Depends(get_session),
+):
+    teacher = Teacher(full_name=create_teacher_request.full_name)
+    session.add(teacher)
+    session.commit()
+
+    return teacher
+
+
+@app.get("/api/teacher", tags=["teacher"], response_model=Teacher)
+async def get_teacher(full_name: str, session: Session = Depends(get_session)):
+    teacher = session.exec(
+        select(Teacher).where(
+            Teacher.full_name == full_name,
+        )
+    ).first()
+
+    return teacher
+
+
+@app.post("/api/teacher/add_assignment", tags=["teacher"], response_model=Assignment)
+async def add_assignment(
+    add_assignment_request: AddTeacherAssignmentRequest,
+    session: Session = Depends(get_session),
+):
+    teacher = session.exec(
+        select(Teacher).where(
+            Teacher.full_name == add_assignment_request.teacher_name,
+        )
+    ).first()
+
+    assignment = Assignment(
+        teacher_id=teacher.id,
+        teacher=teacher,
+        name=add_assignment_request.name,
+        text=add_assignment_request.text,
+    )
+
+    session.add(assignment)
+    session.commit()
+
+    if teacher.assignments:
+        teacher.assignments.append(assignment)
+    else:
+        teacher.assignments = [assignment]
+
+    session.add(teacher)
+    session.commit()
+
+    print("teach assignments: ", teacher.assignments)
+    return assignment
+
+
+@app.post(
+    "/api/teacher/approve_assignment",
+    tags=["teacher"],
+    response_model=StudentTakeAssignmentResponse,
+)
+async def add_assignment(
+    student_assignment: StudentAssignmentRequest,
+    session: Session = Depends(get_session),
+):
+    found_student = session.exec(
+        select(Student, Assignment)
+        .join(Assignment)
+        .where(
+            Assignment.name == student_assignment.assignment_name,
+            Student.full_name == student_assignment.student_name,
+        )
+    ).first()
+
+    found_student[1].done = True
+    session.add(found_student[1])
+    session.commit()
+    session.refresh(found_student[0])
+    session.refresh(found_student[1])
+
+    return StudentTakeAssignmentResponse(
+        student=found_student[0], assignments=found_student[0].assignments
     )

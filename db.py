@@ -1,13 +1,14 @@
 from sqlalchemy.engine.base import Engine
+from models.assignment import Assignment
+from models.student import Student
+from models.teacher import Teacher
 from sqlmodel import SQLModel, create_engine, Session, select
-from models.reservation import Reservation
-from models.ticket import Ticket
-from models.ticket_request import TicketRequest
-from models.tier import Tier
+
+engine = None
 
 
 def create_db_and_tables(db_url) -> Engine:
-    engine = create_engine(db_url)
+    engine = create_engine(db_url, connect_args={"check_same_thread": False})
 
     SQLModel.metadata.create_all(engine)
     return engine
@@ -15,12 +16,11 @@ def create_db_and_tables(db_url) -> Engine:
 
 def clear_test_db(engine) -> None:
     with Session(engine) as session:
-        tiers = session.exec(select(Tier)).fetchall()
-        reservations = session.exec(select(Reservation)).fetchall()
-        ticket_requests = session.exec(select(TicketRequest)).fetchall()
-        tickets = session.exec(select(Ticket)).fetchall()
+        assignments = session.exec(select(Assignment)).fetchall()
+        students = session.exec(select(Student)).fetchall()
+        teachers = session.exec(select(Teacher)).fetchall()
 
-        deleted_data = tiers + reservations + ticket_requests + tickets
+        deleted_data = assignments + students + teachers
 
         for each in deleted_data:
             session.delete(each)
@@ -29,31 +29,26 @@ def clear_test_db(engine) -> None:
 
 
 def create_test_data(engine) -> None:
-    tier_1 = Tier(name="Basic", price=10.0, transfer_fee_percent=1.2)
-    tier_2 = Tier(name="Extended", price=20.0, transfer_fee_percent=1.4)
-
-    reservation_1 = Reservation(email="test@test.com")
-    reservation_2 = Reservation(email="test@protonmail.com")
-
-    tiers_and_reservations = [tier_1, tier_2, reservation_1, reservation_2]
+    student_1 = Student(full_name="Student Studentovich Studentov")
+    teacher_1 = Teacher(full_name="Teachering Teacher Teacherovich")
+    assignment_1 = Assignment(
+        name="Test assignment", text="Test description", teacher=teacher_1
+    )
+    assignment_2 = Assignment(
+        name="Second assignment", text="Test description", teacher=teacher_1
+    )
+    teacher_1.assignments = [assignment_1, assignment_2]
+    student_1.assignments = [assignment_1]
 
     with Session(engine) as session:
-        # for some reason code below doesn't work
-        # map(lambda each: session.add(each), commit_data)
-
-        for each in tiers_and_reservations:
-            session.add(each)
+        session.add(student_1)
+        session.add(teacher_1)
+        session.add(assignment_1)
+        session.add(assignment_2)
         session.commit()
+        session.refresh(teacher_1)
 
-        ticket_1 = Ticket(tier_id=tier_1.id, status="FREE")
-        ticket_2 = Ticket(tier_id=tier_2.id, status="FREE")
-        ticket_3 = Ticket(tier_id=tier_2.id, status="FREE")
-        tickets = [ticket_1, ticket_2, ticket_3]
-
-        for each in tickets:
-            session.add(each)
-
-        session.commit()
+        # print(teacher_1.assignments)
 
 
 if __name__ == "__main__":
